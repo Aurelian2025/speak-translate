@@ -25,34 +25,54 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
 
   async function translate(input: string) {
-    if (!input.trim()) return;
-
-    setLoading(true);
-
-    try {
-      const res = await fetch("/api/translate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          text: input,
-          source,
-          target,
-        }),
-      });
-
-      const data = await res.json();
-      const result = data.translatedText || data.translation || "";
-
-      setTranslated(result);
-      speak(result);
-    } catch {
-      alert("Translation failed");
-    } finally {
-      setLoading(false);
-    }
+  if (!input.trim()) {
+    setTranslated("No text to translate.");
+    return;
   }
+
+  setLoading(true);
+  setTranslated("Translating...");
+
+  try {
+    const res = await fetch("/api/translate", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        text: input,
+        source,
+        target,
+      }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      setTranslated(`API error: ${JSON.stringify(data)}`);
+      return;
+    }
+
+    if (data.error) {
+      setTranslated(`Error: ${JSON.stringify(data)}`);
+      return;
+    }
+
+    const result = data.translatedText || data.translation || "";
+
+    if (!result) {
+      setTranslated(`No translation returned: ${JSON.stringify(data)}`);
+      return;
+    }
+
+    setTranslated(result);
+    speak(result);
+  } catch (error) {
+    setTranslated(`Frontend error: ${String(error)}`);
+  } finally {
+    setLoading(false);
+  }
+}
 
   function startListening() {
     const SpeechRecognition =
