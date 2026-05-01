@@ -16,7 +16,10 @@ const languages = [
   { code: "zh", name: "Chinese" },
 ];
 
+type Side = "A" | "B";
+
 type Message = {
+  side: Side;
   from: string;
   to: string;
   original: string;
@@ -26,13 +29,18 @@ type Message = {
 export default function ConversationPage() {
   const [languageA, setLanguageA] = useState("en");
   const [languageB, setLanguageB] = useState("fr");
-  const [listeningSide, setListeningSide] = useState<"A" | "B" | null>(null);
+  const [activeSide, setActiveSide] = useState<Side>("A");
+  const [listening, setListening] = useState(false);
+  const [autoSwitch, setAutoSwitch] = useState(true);
   const [status, setStatus] = useState("Ready");
   const [messages, setMessages] = useState<Message[]>([]);
 
   const recognitionRef = useRef<any>(null);
 
-  async function translateAndSpeak(text: string, from: string, to: string) {
+  async function translateAndSpeak(text: string, side: Side) {
+    const from = side === "A" ? languageA : languageB;
+    const to = side === "A" ? languageB : languageA;
+
     setStatus("Translating...");
 
     try {
@@ -59,6 +67,7 @@ export default function ConversationPage() {
 
       setMessages((current) => [
         {
+          side,
           from,
           to,
           original: text,
@@ -69,12 +78,21 @@ export default function ConversationPage() {
 
       speak(translated, to);
       setStatus(data.demo ? "Demo translation" : "Translated");
+
+      if (autoSwitch) {
+        const nextSide = side === "A" ? "B" : "A";
+        setActiveSide(nextSide);
+
+        setTimeout(() => {
+          startListening(nextSide);
+        }, 1200);
+      }
     } catch {
       setStatus("Error");
     }
   }
 
-  function startSide(side: "A" | "B") {
+  function startListening(side: Side = activeSide) {
     const SpeechRecognition =
       (window as any).SpeechRecognition ||
       (window as any).webkitSpeechRecognition;
@@ -87,7 +105,6 @@ export default function ConversationPage() {
     stopListening();
 
     const from = side === "A" ? languageA : languageB;
-    const to = side === "A" ? languageB : languageA;
 
     const recognition = new SpeechRecognition();
     recognitionRef.current = recognition;
@@ -97,22 +114,23 @@ export default function ConversationPage() {
     recognition.continuous = false;
 
     recognition.onstart = () => {
-      setListeningSide(side);
+      setListening(true);
+      setActiveSide(side);
       setStatus(`Listening to Person ${side}...`);
     };
 
     recognition.onend = () => {
-      setListeningSide(null);
+      setListening(false);
     };
 
-    recognition.onerror = () => {
-      setListeningSide(null);
-      setStatus("Microphone error");
+    recognition.onerror = (event: any) => {
+      setListening(false);
+      setStatus(`Mic error: ${event.error || "unknown"}`);
     };
 
     recognition.onresult = (event: any) => {
-      const text = event.results[0][0].transcript;
-      translateAndSpeak(text, from, to);
+      const spoken = event.results[0][0].transcript;
+      translateAndSpeak(spoken, side);
     };
 
     recognition.start();
@@ -124,7 +142,7 @@ export default function ConversationPage() {
       recognitionRef.current = null;
     }
 
-    setListeningSide(null);
+    setListening(false);
   }
 
   function speak(text: string, lang: string) {
@@ -137,6 +155,14 @@ export default function ConversationPage() {
     window.speechSynthesis.speak(utterance);
   }
 
+  function clearConversation() {
+    stopListening();
+    window.speechSynthesis.cancel();
+    setMessages([]);
+    setStatus("Conversation cleared");
+    setActiveSide("A");
+  }
+
   return (
     <main className="min-h-screen bg-black px-5 py-8 text-white">
       <div className="mx-auto max-w-2xl space-y-6">
@@ -144,10 +170,13 @@ export default function ConversationPage() {
           <a href="/" className="text-sm text-blue-400">
             ← Back to translator
           </a>
+
           <h1 className="text-4xl font-bold">Conversation Mode</h1>
+
           <p className="text-gray-400">
-            Tap the person who is speaking. The app translates out loud.
+            Speak, translate, reply. Auto-switch keeps the conversation moving.
           </p>
+
           <p className="text-sm text-blue-400">{status}</p>
         </header>
 
@@ -184,27 +213,77 @@ export default function ConversationPage() {
             </label>
           </div>
 
+          <label className="flex items-center justify-between rounded-2xl bg-zinc-800 p-4">
+            <span>
+              <span className="block font-semibold">Auto-switch speakers</span>
+              <span className="text-sm text-gray-400">
+                After Person A speaks, the app listens for Person B next.
+              </span>
+            </span>
+
+            <input
+              type="checkbox"
+              checked={autoSwitch}
+              onChange={(e) => setAutoSwitch(e.target.checked)}
+              className="h-5 w-5"
+            />
+          </label>
+
+          <div className="rounded-2xl bg-zinc-800 p-4 text-center">
+            <p className="text-sm text-gray-400">Next speaker</p>
+            <p className="text-2xl font-bold">Person {activeSide}</p>
+          </div>
+
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <button
-              onClick={() => startSide("A")}
-              className="rounded-3xl bg-blue-600 px-6 py-10 text-2xl font-bold hover:bg-blue-500"
+              onClick={() => startListening("A")}
+              className={`rounded-3xl px-6 py-10 text-2xl font-bold ${
+                activeSide === "A"
+                  ? "bg-blue-600 hover:bg-blue-500"
+                  : "bg-zinc-800 hover:bg-zinc-700"
+              }`}
             >
-              {listeningSide === "A" ? "Listening..." : "Person A speaks"}
+              {listening && activeSide === "A"
+                ? "Listening..."
+                : "Person A speaks"}
             </button>
 
             <button
-              onClick={() => startSide("B")}
-              className="rounded-3xl bg-emerald-600 px-6 py-10 text-2xl font-bold hover:bg-emerald-500"
+              onClick={() => startListening("B")}
+              className={`rounded-3xl px-6 py-10 text-2xl font-bold ${
+                activeSide === "B"
+                  ? "bg-emerald-600 hover:bg-emerald-500"
+                  : "bg-zinc-800 hover:bg-zinc-700"
+              }`}
             >
-              {listeningSide === "B" ? "Listening..." : "Person B speaks"}
+              {listening && activeSide === "B"
+                ? "Listening..."
+                : "Person B speaks"}
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <button
+              onClick={() => startListening(activeSide)}
+              disabled={listening}
+              className="rounded-2xl bg-blue-600 px-6 py-3 font-semibold hover:bg-blue-500 disabled:opacity-50"
+            >
+              Start Next Speaker
+            </button>
+
+            <button
+              onClick={stopListening}
+              className="rounded-2xl bg-red-600 px-6 py-3 font-semibold hover:bg-red-500"
+            >
+              Stop Listening
             </button>
           </div>
 
           <button
-            onClick={stopListening}
+            onClick={clearConversation}
             className="w-full rounded-2xl bg-zinc-800 px-6 py-3 font-semibold hover:bg-zinc-700"
           >
-            Stop
+            Clear Conversation
           </button>
         </section>
 
@@ -217,7 +296,7 @@ export default function ConversationPage() {
             messages.map((message, index) => (
               <div key={index} className="rounded-2xl bg-zinc-900 p-4">
                 <p className="text-sm text-gray-400">
-                  {message.from} → {message.to}
+                  Person {message.side}: {message.from} → {message.to}
                 </p>
                 <p className="mt-2">{message.original}</p>
                 <p className="mt-2 text-xl font-semibold">
