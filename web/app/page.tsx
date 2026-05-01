@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 const languages = [
+  { code: "auto", name: "Auto detect" },
   { code: "en", name: "English" },
   { code: "fr", name: "French" },
   { code: "es", name: "Spanish" },
@@ -17,62 +18,66 @@ const languages = [
 ];
 
 export default function Home() {
-  const [source, setSource] = useState("en");
+  const [source, setSource] = useState("auto");
   const [target, setTarget] = useState("fr");
   const [text, setText] = useState("");
+  const [interimText, setInterimText] = useState("");
   const [translated, setTranslated] = useState("");
+  const [status, setStatus] = useState("Ready");
   const [listening, setListening] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  const recognitionRef = useRef<any>(null);
+
   async function translate(input: string) {
-  if (!input.trim()) {
-    setTranslated("No text to translate.");
-    return;
+    if (!input.trim()) {
+      setTranslated("Type or speak something first.");
+      return;
+    }
+
+    setLoading(true);
+    setStatus("Translating...");
+    setTranslated("");
+
+    try {
+      const res = await fetch("/api/translate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          text: input,
+          source,
+          target,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || data.error) {
+        setTranslated(`Translation error: ${JSON.stringify(data)}`);
+        setStatus("Translation failed");
+        return;
+      }
+
+      const result = data.translatedText || data.translation || "";
+
+      if (!result) {
+        setTranslated(`No translation returned: ${JSON.stringify(data)}`);
+        setStatus("No result");
+        return;
+      }
+
+      setTranslated(result);
+      setStatus(data.demo ? "Demo translation" : "Translated");
+      speak(result);
+    } catch (error) {
+      setTranslated(`Frontend error: ${String(error)}`);
+      setStatus("Error");
+    } finally {
+      setLoading(false);
+    }
   }
-
-  setLoading(true);
-  setTranslated("Translating...");
-
-  try {
-    const res = await fetch("/api/translate", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        text: input,
-        source,
-        target,
-      }),
-    });
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      setTranslated(`API error: ${JSON.stringify(data)}`);
-      return;
-    }
-
-    if (data.error) {
-      setTranslated(`Error: ${JSON.stringify(data)}`);
-      return;
-    }
-
-    const result = data.translatedText || data.translation || "";
-
-    if (!result) {
-      setTranslated(`No translation returned: ${JSON.stringify(data)}`);
-      return;
-    }
-
-    setTranslated(result);
-    speak(result);
-  } catch (error) {
-    setTranslated(`Frontend error: ${String(error)}`);
-  } finally {
-    setLoading(false);
-  }
-}
 
   function startListening() {
     const SpeechRecognition =
@@ -84,22 +89,67 @@ export default function Home() {
       return;
     }
 
+    stopListening();
+
     const recognition = new SpeechRecognition();
+    recognitionRef.current = recognition;
 
-    recognition.lang = source;
-    recognition.interimResults = false;
-    recognition.continuous = false;
+    recognition.lang = source === "auto" ? "en" : source;
+    recognition.interimResults = true;
+    recognition.continuous = true;
 
-    recognition.onstart = () => setListening(true);
-    recognition.onend = () => setListening(false);
+    recognition.onstart = () => {
+      setListening(true);
+      setStatus("Listening...");
+      setInterimText("");
+    };
+
+    recognition.onend = () => {
+      setListening(false);
+      setStatus("Stopped listening");
+    };
+
+    recognition.onerror = (event: any) => {
+      setListening(false);
+      setStatus(`Mic error: ${event.error || "unknown"}`);
+    };
 
     recognition.onresult = (event: any) => {
-      const spoken = event.results[0][0].transcript;
-      setText(spoken);
-      translate(spoken);
+      let finalTranscript = "";
+      let interimTranscript = "";
+
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript;
+        } else {
+          interimTranscript += transcript;
+        }
+      }
+
+      if (interimTranscript) {
+        setInterimText(interimTranscript);
+      }
+
+      if (finalTranscript.trim()) {
+        const nextText = `${text} ${finalTranscript}`.trim();
+        setText(nextText);
+        setInterimText("");
+        translate(nextText);
+      }
     };
 
     recognition.start();
+  }
+
+  function stopListening() {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      recognitionRef.current = null;
+    }
+
+    setListening(false);
   }
 
   function speak(input: string) {
@@ -113,23 +163,41 @@ export default function Home() {
   }
 
   function swapLanguages() {
-    setSource(target);
-    setTarget(source);
+    if (source === "auto") {
+      setSource(target);
+      setTarget("en");
+    } else {
+      setSource(target);
+      setTarget(source);
+    }
+
     setText("");
+    setInterimText("");
     setTranslated("");
+    setStatus("Languages swapped");
+  }
+
+  function clearAll() {
+    stopListening();
+    window.speechSynthesis.cancel();
+    setText("");
+    setInterimText("");
+    setTranslated("");
+    setStatus("Cleared");
   }
 
   return (
-    <main className="min-h-screen bg-black text-white px-6 py-10">
-      <div className="mx-auto max-w-xl space-y-6">
+    <main className="min-h-screen bg-black text-white px-5 py-8">
+      <div className="mx-auto max-w-2xl space-y-6">
         <header className="text-center space-y-3">
           <h1 className="text-4xl font-bold">Speak → Translate → Speak</h1>
           <p className="text-gray-400">
-            Speak in one language and hear the translation aloud.
+            Speak or type. Translate instantly. Hear it aloud.
           </p>
+          <p className="text-sm text-blue-400">{status}</p>
         </header>
 
-        <section className="rounded-3xl bg-zinc-900 p-5 space-y-5">
+        <section className="rounded-3xl bg-zinc-900 p-5 space-y-5 shadow-xl">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_auto_1fr] sm:items-end">
             <label className="space-y-2">
               <span className="text-sm text-gray-400">From</span>
@@ -160,44 +228,88 @@ export default function Home() {
                 onChange={(e) => setTarget(e.target.value)}
                 className="w-full rounded-xl bg-zinc-800 px-4 py-3 text-white outline-none"
               >
-                {languages.map((language) => (
-                  <option key={language.code} value={language.code}>
-                    {language.name}
-                  </option>
-                ))}
+                {languages
+                  .filter((language) => language.code !== "auto")
+                  .map((language) => (
+                    <option key={language.code} value={language.code}>
+                      {language.name}
+                    </option>
+                  ))}
               </select>
             </label>
           </div>
 
-          <button
-            onClick={startListening}
-            disabled={listening || loading}
-            className="w-full rounded-2xl bg-blue-600 px-6 py-4 text-lg font-semibold hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {listening ? "Listening..." : loading ? "Translating..." : "Tap to Speak"}
-          </button>
+          <div className="rounded-2xl bg-zinc-800 p-4 space-y-3">
+            <label className="block text-sm text-gray-400">Input text</label>
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="Type here, or tap the mic and speak..."
+              className="min-h-32 w-full resize-none rounded-xl bg-zinc-950 p-4 text-lg text-white outline-none"
+            />
 
-          <div className="space-y-4">
-            <div className="rounded-2xl bg-zinc-800 p-4">
-              <p className="mb-2 text-sm text-gray-400">You said:</p>
-              <p className="min-h-6 text-lg">{text || "Nothing yet"}</p>
-            </div>
-
-            <div className="rounded-2xl bg-zinc-800 p-4">
-              <p className="mb-2 text-sm text-gray-400">Translation:</p>
-              <p className="min-h-6 text-lg">
-                {translated || "Translation will appear here"}
+            {interimText && (
+              <p className="rounded-xl bg-zinc-700 p-3 text-gray-300">
+                Hearing: {interimText}
               </p>
-            </div>
+            )}
           </div>
 
-          <button
-            onClick={() => speak(translated)}
-            disabled={!translated}
-            className="w-full rounded-2xl bg-zinc-700 px-6 py-3 font-semibold hover:bg-zinc-600 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Replay Translation
-          </button>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {!listening ? (
+              <button
+                onClick={startListening}
+                disabled={loading}
+                className="rounded-2xl bg-blue-600 px-6 py-4 text-lg font-semibold hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Tap to Speak
+              </button>
+            ) : (
+              <button
+                onClick={stopListening}
+                className="rounded-2xl bg-red-600 px-6 py-4 text-lg font-semibold hover:bg-red-500"
+              >
+                Stop Listening
+              </button>
+            )}
+
+            <button
+              onClick={() => translate(text)}
+              disabled={loading || !text.trim()}
+              className="rounded-2xl bg-emerald-600 px-6 py-4 text-lg font-semibold hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {loading ? "Translating..." : "Translate Text"}
+            </button>
+          </div>
+
+          <div className="rounded-2xl bg-zinc-800 p-4">
+            <p className="mb-2 text-sm text-gray-400">Translation</p>
+            <p className="min-h-16 whitespace-pre-wrap text-xl">
+              {translated || "Translation will appear here"}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <button
+              onClick={() => speak(translated)}
+              disabled={!translated}
+              className="rounded-2xl bg-zinc-700 px-6 py-3 font-semibold hover:bg-zinc-600 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Replay Translation
+            </button>
+
+            <button
+              onClick={clearAll}
+              className="rounded-2xl bg-zinc-800 px-6 py-3 font-semibold hover:bg-zinc-700"
+            >
+              Clear
+            </button>
+          </div>
+
+          <p className="text-center text-xs text-gray-500">
+            Translation is currently in demo mode until a paid translation
+            backend is connected.
+          </p>
         </section>
       </div>
     </main>
