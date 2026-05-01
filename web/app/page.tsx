@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const languages = [
   { code: "auto", name: "Auto detect" },
@@ -17,6 +17,11 @@ const languages = [
   { code: "zh", name: "Chinese" },
 ];
 
+type HistoryItem = {
+  text: string;
+  translated: string;
+};
+
 export default function Home() {
   const [source, setSource] = useState("auto");
   const [target, setTarget] = useState("fr");
@@ -26,8 +31,24 @@ export default function Home() {
   const [status, setStatus] = useState("Ready");
   const [listening, setListening] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
 
   const recognitionRef = useRef<any>(null);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("translation-history");
+    if (saved) {
+      setHistory(JSON.parse(saved));
+    }
+  }, []);
+
+  function saveHistory(input: string, output: string) {
+    const newEntry = { text: input, translated: output };
+    const updatedHistory = [newEntry, ...history].slice(0, 10);
+
+    setHistory(updatedHistory);
+    localStorage.setItem("translation-history", JSON.stringify(updatedHistory));
+  }
 
   async function translate(input: string) {
     if (!input.trim()) {
@@ -69,6 +90,7 @@ export default function Home() {
       }
 
       setTranslated(result);
+      saveHistory(input, result);
       setStatus(data.demo ? "Demo translation" : "Translated");
       speak(result);
     } catch (error) {
@@ -176,27 +198,29 @@ export default function Home() {
     setTranslated("");
     setStatus("Languages swapped");
   }
-async function copyTranslation() {
-  if (!translated) return;
 
-  await navigator.clipboard.writeText(translated);
-  setStatus("Translation copied");
-}
+  async function copyTranslation() {
+    if (!translated) return;
 
-async function shareTranslation() {
-  if (!translated) return;
-
-  if (navigator.share) {
-    await navigator.share({
-      title: "Speak Translate",
-      text: translated,
-    });
-    setStatus("Translation shared");
-  } else {
     await navigator.clipboard.writeText(translated);
-    setStatus("Sharing not supported. Translation copied instead.");
+    setStatus("Translation copied");
   }
-}
+
+  async function shareTranslation() {
+    if (!translated) return;
+
+    if (navigator.share) {
+      await navigator.share({
+        title: "Speak Translate",
+        text: translated,
+      });
+      setStatus("Translation shared");
+    } else {
+      await navigator.clipboard.writeText(translated);
+      setStatus("Sharing not supported. Translation copied instead.");
+    }
+  }
+
   function clearAll() {
     stopListening();
     window.speechSynthesis.cancel();
@@ -206,22 +230,28 @@ async function shareTranslation() {
     setStatus("Cleared");
   }
 
+  function clearHistory() {
+    setHistory([]);
+    localStorage.removeItem("translation-history");
+    setStatus("History cleared");
+  }
+
   return (
     <main className="min-h-screen bg-black text-white px-5 py-8">
       <div className="mx-auto max-w-2xl space-y-6">
         <header className="text-center space-y-3">
-  <h1 className="text-4xl font-bold">Speak → Translate → Speak</h1>
+          <h1 className="text-4xl font-bold">Speak → Translate → Speak</h1>
 
-  <p className="text-gray-400">
-    Speak or type. Translate instantly. Hear it aloud.
-  </p>
+          <p className="text-gray-400">
+            Speak or type. Translate instantly. Hear it aloud.
+          </p>
 
-  <a href="/conversation" className="inline-block text-sm text-blue-400">
-    Open Conversation Mode →
-  </a>
+          <a href="/conversation" className="inline-block text-sm text-blue-400">
+            Open Conversation Mode →
+          </a>
 
-  <p className="text-sm text-blue-400">{status}</p>
-</header>
+          <p className="text-sm text-blue-400">{status}</p>
+        </header>
 
         <section className="rounded-3xl bg-zinc-900 p-5 space-y-5 shadow-xl">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_auto_1fr] sm:items-end">
@@ -316,37 +346,71 @@ async function shareTranslation() {
           </div>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
-  <button
-    onClick={() => speak(translated)}
-    disabled={!translated}
-    className="rounded-2xl bg-zinc-700 px-6 py-3 font-semibold hover:bg-zinc-600 disabled:cursor-not-allowed disabled:opacity-50"
-  >
-    Replay
-  </button>
+            <button
+              onClick={() => speak(translated)}
+              disabled={!translated}
+              className="rounded-2xl bg-zinc-700 px-6 py-3 font-semibold hover:bg-zinc-600 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Replay
+            </button>
 
-  <button
-    onClick={copyTranslation}
-    disabled={!translated}
-    className="rounded-2xl bg-zinc-700 px-6 py-3 font-semibold hover:bg-zinc-600 disabled:cursor-not-allowed disabled:opacity-50"
-  >
-    Copy
-  </button>
+            <button
+              onClick={copyTranslation}
+              disabled={!translated}
+              className="rounded-2xl bg-zinc-700 px-6 py-3 font-semibold hover:bg-zinc-600 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Copy
+            </button>
 
-  <button
-    onClick={shareTranslation}
-    disabled={!translated}
-    className="rounded-2xl bg-zinc-700 px-6 py-3 font-semibold hover:bg-zinc-600 disabled:cursor-not-allowed disabled:opacity-50"
-  >
-    Share
-  </button>
+            <button
+              onClick={shareTranslation}
+              disabled={!translated}
+              className="rounded-2xl bg-zinc-700 px-6 py-3 font-semibold hover:bg-zinc-600 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Share
+            </button>
 
-  <button
-    onClick={clearAll}
-    className="rounded-2xl bg-zinc-800 px-6 py-3 font-semibold hover:bg-zinc-700"
-  >
-    Clear
-  </button>
-</div>
+            <button
+              onClick={clearAll}
+              className="rounded-2xl bg-zinc-800 px-6 py-3 font-semibold hover:bg-zinc-700"
+            >
+              Clear
+            </button>
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-sm text-gray-400">Recent translations</h2>
+
+              {history.length > 0 && (
+                <button
+                  onClick={clearHistory}
+                  className="text-xs text-gray-500 hover:text-white"
+                >
+                  Clear history
+                </button>
+              )}
+            </div>
+
+            {history.length === 0 ? (
+              <p className="text-sm text-gray-500">No history yet.</p>
+            ) : (
+              history.map((item, index) => (
+                <button
+                  key={index}
+                  onClick={() => {
+                    setText(item.text);
+                    setTranslated(item.translated);
+                    setStatus("Loaded from history");
+                  }}
+                  className="w-full rounded-xl bg-zinc-800 p-3 text-left hover:bg-zinc-700"
+                >
+                  <p className="text-sm text-gray-400">{item.text}</p>
+                  <p className="font-semibold text-white">{item.translated}</p>
+                </button>
+              ))
+            )}
+          </div>
 
           <p className="text-center text-xs text-gray-500">
             Translation is currently in demo mode until a paid translation
