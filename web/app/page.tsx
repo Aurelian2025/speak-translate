@@ -29,7 +29,7 @@ export default function Home() {
 
   function startListening() {
     const SpeechRecognition =
-      window.SpeechRecognition || window.webkitSpeechRecognition;
+  (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
       alert("Speech recognition not supported");
