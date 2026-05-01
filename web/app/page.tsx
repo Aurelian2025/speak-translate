@@ -51,55 +51,74 @@ export default function Home() {
   }
 
   async function translate(input: string) {
-    if (!input.trim()) {
-      setTranslated("Type or speak something first.");
+  if (!input.trim()) {
+    setTranslated("Type or speak something first.");
+    return;
+  }
+
+  const cacheKey = `translation:${source}:${target}:${input.trim().toLowerCase()}`;
+  const cached = localStorage.getItem(cacheKey);
+
+  if (cached) {
+    setTranslated(cached);
+    setStatus("Loaded from offline cache");
+    speak(cached);
+    return;
+  }
+
+  setLoading(true);
+  setStatus("Translating...");
+  setTranslated("");
+
+  try {
+    const res = await fetch("/api/translate", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        text: input,
+        source,
+        target,
+      }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok || data.error) {
+      setTranslated(`Translation error: ${JSON.stringify(data)}`);
+      setStatus("Translation failed");
       return;
     }
 
-    setLoading(true);
-    setStatus("Translating...");
-    setTranslated("");
+    const result = data.translatedText || data.translation || "";
 
-    try {
-      const res = await fetch("/api/translate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          text: input,
-          source,
-          target,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok || data.error) {
-        setTranslated(`Translation error: ${JSON.stringify(data)}`);
-        setStatus("Translation failed");
-        return;
-      }
-
-      const result = data.translatedText || data.translation || "";
-
-      if (!result) {
-        setTranslated(`No translation returned: ${JSON.stringify(data)}`);
-        setStatus("No result");
-        return;
-      }
-
-      setTranslated(result);
-      saveHistory(input, result);
-      setStatus(data.demo ? "Demo translation" : "Translated");
-      speak(result);
-    } catch (error) {
-      setTranslated(`Frontend error: ${String(error)}`);
-      setStatus("Error");
-    } finally {
-      setLoading(false);
+    if (!result) {
+      setTranslated(`No translation returned: ${JSON.stringify(data)}`);
+      setStatus("No result");
+      return;
     }
+
+    localStorage.setItem(cacheKey, result);
+
+    setTranslated(result);
+    saveHistory(input, result);
+    setStatus(data.demo ? "Demo translation saved offline" : "Translated and saved offline");
+    speak(result);
+  } catch (error) {
+    if (cached) {
+      setTranslated(cached);
+      setStatus("Offline: loaded cached translation");
+      speak(cached);
+      return;
+    }
+
+    setTranslated(`Offline and no cached translation found.`);
+    setStatus("Offline");
+  } finally {
+    setLoading(false);
   }
+}
 
   function startListening() {
     const SpeechRecognition =
