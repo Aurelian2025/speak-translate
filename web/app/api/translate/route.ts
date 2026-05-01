@@ -2,7 +2,14 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
 
-    const response = await fetch("https://translate.mentality.rip/translate", {
+    if (!process.env.LIBRETRANSLATE_URL) {
+      return Response.json({
+        translatedText: `[Demo translation: ${body.target}] ${body.text}`,
+        demo: true,
+      });
+    }
+
+    const response = await fetch("https://translate.astian.org/translate", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
