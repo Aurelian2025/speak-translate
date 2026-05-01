@@ -2,7 +2,7 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
 
-    const response = await fetch("https://libretranslate.de/translate", {
+    const response = await fetch(`${process.env.LIBRETRANSLATE_URL}/translate`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -25,7 +25,10 @@ export async function POST(req: Request) {
     }
 
     return Response.json(data);
-  } catch {
-    return Response.json({ error: "Translation failed" }, { status: 500 });
+  } catch (error) {
+    return Response.json(
+      { error: "Proxy failed", details: String(error) },
+      { status: 500 }
+    );
   }
 }
