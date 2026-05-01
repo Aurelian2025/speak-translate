@@ -9,6 +9,9 @@ const languages = [
   { code: "de", name: "German" },
   { code: "it", name: "Italian" },
   { code: "pt", name: "Portuguese" },
+  { code: "ro", name: "Romanian" },
+  { code: "ru", name: "Russian" },
+  { code: "fa", name: "Farsi / Persian" },
   { code: "ar", name: "Arabic" },
   { code: "zh", name: "Chinese" },
 ];
