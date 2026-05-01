@@ -190,12 +190,18 @@ export default function Home() {
     <main className="min-h-screen bg-black text-white px-5 py-8">
       <div className="mx-auto max-w-2xl space-y-6">
         <header className="text-center space-y-3">
-          <h1 className="text-4xl font-bold">Speak → Translate → Speak</h1>
-          <p className="text-gray-400">
-            Speak or type. Translate instantly. Hear it aloud.
-          </p>
-          <p className="text-sm text-blue-400">{status}</p>
-        </header>
+  <h1 className="text-4xl font-bold">Speak → Translate → Speak</h1>
+
+  <p className="text-gray-400">
+    Speak or type. Translate instantly. Hear it aloud.
+  </p>
+
+  <a href="/conversation" className="inline-block text-sm text-blue-400">
+    Open Conversation Mode →
+  </a>
+
+  <p className="text-sm text-blue-400">{status}</p>
+</header>
 
         <section className="rounded-3xl bg-zinc-900 p-5 space-y-5 shadow-xl">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_auto_1fr] sm:items-end">
