@@ -176,7 +176,27 @@ export default function Home() {
     setTranslated("");
     setStatus("Languages swapped");
   }
+async function copyTranslation() {
+  if (!translated) return;
 
+  await navigator.clipboard.writeText(translated);
+  setStatus("Translation copied");
+}
+
+async function shareTranslation() {
+  if (!translated) return;
+
+  if (navigator.share) {
+    await navigator.share({
+      title: "Speak Translate",
+      text: translated,
+    });
+    setStatus("Translation shared");
+  } else {
+    await navigator.clipboard.writeText(translated);
+    setStatus("Sharing not supported. Translation copied instead.");
+  }
+}
   function clearAll() {
     stopListening();
     window.speechSynthesis.cancel();
@@ -295,22 +315,38 @@ export default function Home() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <button
-              onClick={() => speak(translated)}
-              disabled={!translated}
-              className="rounded-2xl bg-zinc-700 px-6 py-3 font-semibold hover:bg-zinc-600 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Replay Translation
-            </button>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+  <button
+    onClick={() => speak(translated)}
+    disabled={!translated}
+    className="rounded-2xl bg-zinc-700 px-6 py-3 font-semibold hover:bg-zinc-600 disabled:cursor-not-allowed disabled:opacity-50"
+  >
+    Replay
+  </button>
 
-            <button
-              onClick={clearAll}
-              className="rounded-2xl bg-zinc-800 px-6 py-3 font-semibold hover:bg-zinc-700"
-            >
-              Clear
-            </button>
-          </div>
+  <button
+    onClick={copyTranslation}
+    disabled={!translated}
+    className="rounded-2xl bg-zinc-700 px-6 py-3 font-semibold hover:bg-zinc-600 disabled:cursor-not-allowed disabled:opacity-50"
+  >
+    Copy
+  </button>
+
+  <button
+    onClick={shareTranslation}
+    disabled={!translated}
+    className="rounded-2xl bg-zinc-700 px-6 py-3 font-semibold hover:bg-zinc-600 disabled:cursor-not-allowed disabled:opacity-50"
+  >
+    Share
+  </button>
+
+  <button
+    onClick={clearAll}
+    className="rounded-2xl bg-zinc-800 px-6 py-3 font-semibold hover:bg-zinc-700"
+  >
+    Clear
+  </button>
+</div>
 
           <p className="text-center text-xs text-gray-500">
             Translation is currently in demo mode until a paid translation
