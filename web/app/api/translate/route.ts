@@ -2,21 +2,26 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
 
+    const source = body.source === "auto" ? "auto" : body.source;
+
     if (!process.env.LIBRETRANSLATE_URL) {
       return Response.json({
-        translatedText: `[Demo translation: ${body.target}] ${body.text}`,
+        translatedText: `[Demo ${source} → ${body.target}] ${body.text}`,
         demo: true,
       });
     }
 
-    const response = await fetch("https://translate.astian.org/translate", {
+    const response = await fetch(`${process.env.LIBRETRANSLATE_URL}/translate`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        ...(process.env.LIBRETRANSLATE_API_KEY
+          ? { Authorization: `Bearer ${process.env.LIBRETRANSLATE_API_KEY}` }
+          : {}),
       },
       body: JSON.stringify({
         q: body.text,
-        source: body.source,
+        source,
         target: body.target,
         format: "text",
       }),
@@ -26,7 +31,7 @@ export async function POST(req: Request) {
 
     if (!response.ok) {
       return Response.json(
-        { error: data?.error || "Translation failed" },
+        { error: data?.error || "Translation failed", details: data },
         { status: response.status }
       );
     }
