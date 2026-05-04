@@ -28,7 +28,18 @@ export default function Home() {
   const [history, setHistory] = useState<HistoryItem[]>([]);
 
   const recognitionRef = useRef<any>(null);
-
+useEffect(() => {
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker
+      .register("/sw.js")
+      .then(() => {
+        console.log("Service Worker registered");
+      })
+      .catch((err) => {
+        console.error("SW registration failed", err);
+      });
+  }
+}, []);
   useEffect(() => {
     const saved = localStorage.getItem("translation-history");
     if (saved) {
