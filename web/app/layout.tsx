@@ -17,6 +17,12 @@ export const metadata: Metadata = {
   description: "Speak in one language and hear the translation aloud.",
   applicationName: "Speak Translate",
   manifest: "/manifest.json",
+
+  icons: {
+    icon: "/icon-192.png",
+    apple: "/icon-192.png",
+  },
+
   appleWebApp: {
     capable: true,
     title: "Speak Translate",
